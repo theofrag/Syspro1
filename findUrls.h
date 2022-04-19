@@ -1,3 +1,3 @@
 #include <string>
 
-int findUrls(std::string);
+int findUrls(char*, char* , char* );

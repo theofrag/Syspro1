@@ -10,6 +10,10 @@ OBJS =   sniffer.o findUrls.o
 
 EXEC = sniffer
 
+$(EXEC): $(OBJS)
+	$(CC) $(OBJS) -o $(EXEC) $(LDFLAGS)
+
+
 run: $(EXEC)
 	./$(EXEC)
 

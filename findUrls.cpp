@@ -16,16 +16,22 @@
 using namespace std;
 
 
+
 // it takes a file name and writes to the file filename.out urls from filename and the number of their occurances
 //TODO an den yparxei to www. pali to dexomai, afoy yparxei to http://
-int findUrls(char* filename, char* outputPath){
+int findUrls(char* filename, char* listenerPath ,char* outputPath){
 
     map <string,int> urlMap;
     string http;
     // 
     int fdes; 
-    if( (fdes = open(filename,O_RDONLY)) == -1){
-        perror("open error");
+
+    char* listenerFile = new char[strlen(filename) + strlen(listenerPath)+1];
+    strcat(listenerFile,listenerPath);
+    strcat(listenerFile,filename);
+   
+    if( (fdes = open(listenerFile, O_RDWR)) == -1){
+        perror("opeen error ");
         exit(3);
     }
 
@@ -133,7 +139,6 @@ int findUrls(char* filename, char* outputPath){
     strcat(outputFile,outputPath);
     strcat(outputFile,filename);
     strcat(outputFile,".out");
-    cout << outputFile<<endl;
    fdes = open(outputFile,O_CREAT|O_RDWR,S_IRWXU);
 
    if(fdes == -1){
@@ -163,7 +168,6 @@ int findUrls(char* filename, char* outputPath){
         }
 
         // prints in binary form so ints dont display with cat
-        cout << itr->second<<endl;
         if(write(fdes,&(itr->second),sizeof(itr->second))<0){
             perror("write error");
             delete[] outputFile;
@@ -179,11 +183,3 @@ int findUrls(char* filename, char* outputPath){
 
 }
 
-
-
-int main (void){
-    
-    char t[] = "test";
-    findUrls(t , "outs/");
-    return 0;
-}
