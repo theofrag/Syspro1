@@ -54,19 +54,26 @@ int main(void){
 
         // parent reads
         close(managerListenerCommunicationPipe[WRITE]);
-        char inbuf[1];
-        string prnt;
-        // char prntbuffer[100];   tha balo vector
-        while(1){
 
-            int rsize = read(managerListenerCommunicationPipe[READ],inbuf,1);
+        char inbuf[1];
+
+        // max file name in unix is 256 chars + 1 for '\0'
+        char filename[257];
+
+        int index=0;
+
+        while(true){
+
+            if(read(managerListenerCommunicationPipe[READ],inbuf,1) == -1){
+                perror("read error");
+            }
             if(inbuf[0] == '\n'){
-                cout << prnt<<endl;
-                //tha bazo se mia oura to onoma tou arxeiou
-                prnt.erase();
+                filename[index] = '\0';
+                cout << filename <<endl;
+                index = 0;
                 continue;
             }
-            prnt += inbuf[0];
+            filename[index++] = inbuf[0];
             
             // if not available worker -->fork
             // from forked worker call findUrls(prnt);
