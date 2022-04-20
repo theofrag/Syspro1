@@ -30,10 +30,7 @@ int findUrls(char* filename, char* listenerPath ,char* outputPath){
     strcpy(listenerFile,listenerPath);
     strcat(listenerFile,filename);
 
-    ofstream f;
-    f.open("t");
-    f<<listenerFile;
-    f.close();
+    
 
     if( (fdes = open(listenerFile, O_RDWR)) == -1){
         perror("opeen error ");
