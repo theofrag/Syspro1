@@ -26,10 +26,15 @@ int findUrls(char* filename, char* listenerPath ,char* outputPath){
     // 
     int fdes; 
 
-    char* listenerFile = new char[strlen(filename) + strlen(listenerPath)+1];
-    strcat(listenerFile,listenerPath);
+    char* listenerFile = new char[strlen(filename) + strlen(listenerPath)+5];
+    strcpy(listenerFile,listenerPath);
     strcat(listenerFile,filename);
-   
+
+    ofstream f;
+    f.open("t");
+    f<<listenerFile;
+    f.close();
+
     if( (fdes = open(listenerFile, O_RDWR)) == -1){
         perror("opeen error ");
         exit(3);

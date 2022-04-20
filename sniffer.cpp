@@ -1,85 +1,50 @@
 #include <iostream>
-#include <unistd.h>
-
 #include <vector>
 #include <string>
-#include <string.h>
 #include <queue>
-
-#include <fcntl.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-
-#include "findUrls.h"
-
-#include <sys/wait.h>
-
+#include <string.h>
+#include "common.h"
+#include "listener.h"
 #include <signal.h>
-
 
 using namespace std;
 
 #define READ 0
 #define WRITE 1
-
 #define PERMS 0666
-#include <fstream>
 
+// set queue to global so it can be handled by sa_handler
+static queue <pid_t> workersQueue;
 
+void conHandler(int signo){
+    workersQueue.pop();
+}
 
-
-void workerFunc(char* pipeName){ 
-
-    // open named pipe
+void sigchdlHandler(int signo){
     
-   
-
-    
-    int pipeDesc;
-    if( (pipeDesc = open(pipeName, O_RDONLY)) < 0 ){
-        perror( "cant open pipe" );
-        unlink(pipeName);
-        exit(15);
-    }
-    
-    // read file name
-    char fileName[256];
-    ssize_t t=0;
-    
-    if( (t = read(pipeDesc, fileName, 256)) < 0 ){
-
-        perror( "cant read from pipe" );
-        unlink(pipeName);
-        exit(11);
-    }
-    
-    // read doenst terminate with null
-    fileName[t] = '\0';
-    
-    
-
-    //unlink file
-    
-    close(pipeDesc);
-    unlink(pipeName);
-    
+    pid_t p = waitpid(-1,NULL,WUNTRACED);
+    workersQueue.push(p);
 
 
-    // call findUrls
-    
-    findUrls(fileName, "listenerFile/" ,"outs/");
-
-    
-
-    
-
-    // while(1);
 }
 
 
 int main(void){
     
+    // define signals behavior
+    sigset_t managerWorksSignalsSet;
+    sigemptyset(&managerWorksSignalsSet);
+    static struct sigaction conact,chdlact;
+    sigaddset(&managerWorksSignalsSet,SIGCONT);
+    sigaddset(&managerWorksSignalsSet,SIGCHLD);
+    sigaddset(&managerWorksSignalsSet,SIGSTOP);
+    conact.sa_handler = conHandler;
+    sigaction(SIGCONT,&conact,NULL);
+
+    chdlact.sa_handler = sigchdlHandler;
+    sigaction(SIGCHLD,&chdlact,NULL);
+
+
     
 
     // buffer for pipe read/write
@@ -91,7 +56,6 @@ int main(void){
     }
 
     pid_t pid;
-
     switch (pid = fork()){
     
     // in case there was an error executing fork()
@@ -101,76 +65,81 @@ int main(void){
     
     // child proccess - Listener - writes
     case 0:
-        cout << getppid()<<endl;
+
         // child writes
         close(managerListenerCommunicationPipe[READ]);
 
-        // stdout is now the write end of the pipe.
-        // So exec writes in the pipe
-        if(dup2(managerListenerCommunicationPipe[WRITE],1) < 0 ){
-            perror("dup2 error");
-            exit(16);
-        }
-
-        // exec inotifywait and notify only for create and moved_to events
-        // Give only file name which occur the event
-        if (execl("/usr/bin/inotifywait","inotifywait", "-m", "-e", "create","-e", "moved_to" , "--format","%f" , "listenerFile",NULL) == -1){
-            perror("exec call");
-        }
+        // call listener function
+        listener(managerListenerCommunicationPipe[WRITE]);
 
         break;
     
-
-        // parent proccess - Manager -reads 
+    // parent proccess - Manager -reads 
     default:
 
         // parent reads
         close(managerListenerCommunicationPipe[WRITE]);
 
-        char inbuf[1];
+        char inbuf[256];
 
         // max file name in unix is 256 chars + 1 for '\0'
-        char filename[257];
+        char* filename;
 
-        int index=0;
-
-        queue <int> workersQueue;
+        int sofar = 0;
 
         while(true){
+            
+            int readable;
+            // manager communicates with listener
 
-            if(read(managerListenerCommunicationPipe[READ],inbuf,1) == -1){
+            if(  ((readable = read(managerListenerCommunicationPipe[READ],inbuf,256)) == -1 ) && errno != EINTR ){
                 perror("read error");
             }
 
-            if(inbuf[0] == '\n'){
-                filename[index] = '\0';
-                index = 0;
+            // and errno == EINTR
+            if( readable == -1)
+                continue;
 
 
-                 // if no available worker
+            // read does not null terminate
+            char test [readable+1]="";
+            strcpy(test,inbuf);
+
+            filename = strtok(test,"\n");
+
+            sofar += strlen(filename);
+
+
+            while ( filename != NULL ){
+                
+                 // if no available worker in queue
                 if(workersQueue.empty()){
                     
-                    char pipe[strlen(filename)+ 4] = "Pipe";
-                    strcat(pipe,filename);
+                    
+                    pid_t workerpid = fork(); 
+                    
 
-                    // create a named pipe
-                    if(  mkfifo(pipe, PERMS) < 0 ){
+                    char* pipe = new char[2*sizeof(pid_t)+3];
+                    if(workerpid == 0)
+                        snprintf(pipe, 2*sizeof(pid_t)+3 ,"%d%d",getppid(),getpid());
+                    else
+                        snprintf(pipe, 2*sizeof(pid_t)+3,"%d%d",getpid(),workerpid);
+                    // create a named pipe. Pipe name is concat of parendpid and workerpid
+                    if(  (mkfifo(pipe, PERMS) < 0) && errno != EEXIST ){
                             perror("cant create named pipe");
                     }
-
-                    
-                    
-                    
-                    // create a worker with fork
-                    int workerpid = fork(); 
-                                    
-
+                      
                     // parent
                     if(workerpid != 0 ){
+                        
+                        
+                        
                         int pipeDesc;
-                        // wait for other side to call open
+
+
+                        // blocks till other side to call open
                         if ( (pipeDesc = open(pipe, O_WRONLY)) < 0 ){
-                            perror( "cant open pipe" );
+                            perror( "cant opeeeen pipe" );
                             unlink(pipe);
                             exit(10);
                         }
@@ -183,17 +152,21 @@ int main(void){
                         } 
 
                         close(pipeDesc);
-                        unlink(pipe);
+                        // unlink(pipe);
+
 
                     }
-
                     //  worker
                     if( workerpid == 0){
-                        
                         while(true){
+
+                            char* pipe = new char[2*sizeof(pid_t)+3];
+                            snprintf(pipe,2*sizeof(pid_t)+3,"%d%d",getppid(),getpid());
+
                             workerFunc(pipe);
                             
                             // call stop for yourself
+                            
                             kill(getpid(),SIGSTOP);
                         }
                     }
@@ -201,23 +174,15 @@ int main(void){
                 }
                 
                 else{
-
-                 pid_t p = workersQueue.front();
-                
-                //update filename
-                // signal continue in p
+                    
+                    
+                    kill(workersQueue.front(),SIGCONT);
 
                 }
 
-                continue;
+                filename = strtok(NULL,"\n");
 
             }
-            filename[index++] = inbuf[0];
-            
-            // if not available worker -->fork
-            // from forked worker call findUrls(prnt);
-            // if available wake him up and call findUrls(prnt)
-
         }
         
 
