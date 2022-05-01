@@ -13,7 +13,7 @@ OBJS =   sniffer.o $(MODULES)/findUrls.o  $(MODULES)/workerFunc.o $(MODULES)/lis
 
 EXEC = sniffer
 
-ARGS = -p ./listenerFile
+ARGS = -p ./listenerFile/
 
 $(EXEC): $(OBJS)
 	$(CC) $(OBJS) -o $(EXEC) $(LDFLAGS) 
@@ -26,3 +26,5 @@ run: $(EXEC)
 clean:
 	rm -f $(OBJS) $(EXEC)
 
+valgrind:
+	valgrind ./$(EXEC) $(ARGS)

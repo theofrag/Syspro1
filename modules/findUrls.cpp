@@ -92,11 +92,37 @@ int findUrls(char* filename, char* listenerPath ,char* outputPath){
 
                                 if(ch == '/'){
 
-                                    // ignore www.
-                                    for(int i=0;i<4;++i){
+                                    if(read(fdes,&ch,1)<0){
+                                        perror("read from file");
+                                        exit(4);
+                                    }
+                                    // ignore www. if exist
+                                    if(ch == 'w'){
+                                        http += "w";
+
                                         if(read(fdes,&ch,1)<0){
                                             perror("read from file");
                                             exit(4);
+                                        }
+                                        if(ch == 'w'){
+                                            http += "w";
+
+                                            if(read(fdes,&ch,1)<0){
+                                                perror("read from file");
+                                                exit(4);
+                                            }
+
+                                            if(ch == 'w'){
+                                            http += "w";
+
+                                                if(read(fdes,&ch,1)<0){
+                                                    perror("read from file");
+                                                    exit(4);
+                                                }
+                                                if(ch == '.'){
+                                                    http = "";
+                                                }
+                                            }
                                         }
                                     }
 
@@ -138,7 +164,7 @@ int findUrls(char* filename, char* listenerPath ,char* outputPath){
     //todo must be freed
     char* outputFile = new char[strlen(filename) + strlen(outputPath )+ 4 + 1];
     
-    strcat(outputFile,outputPath);
+    strcpy(outputFile,outputPath);
     strcat(outputFile,filename);
     strcat(outputFile,".out");
    fdes = open(outputFile,O_CREAT|O_RDWR,S_IRWXU);
@@ -160,30 +186,35 @@ int findUrls(char* filename, char* listenerPath ,char* outputPath){
 
         if(write(fdes,str,size+1)<0){
             perror("write error");
+            close(fdes);
             delete[] outputFile;
             exit(6);
         }
         if(write(fdes,&space,1)<0){
             perror("write error");
+            close(fdes);
             delete[] outputFile;
             exit(6);
         }
 
         // prints in binary form so ints dont display with cat
-        char* number = new char[sizeof(number)+2];
-        snprintf(number,sizeof(number)+2,"%d",itr->second);
-        if(write(fdes,number,sizeof(itr->second))<0){
+        char* number = new char[sizeof(int)+2];
+        snprintf(number,sizeof(itr->second)+2,"%d",itr->second);
+        if(write(fdes,number,strlen(number))<0){
             perror("write error");
+            close(fdes);
             delete[] outputFile;
             exit(6);
         }
         if(write(fdes,&newLine,1)<0){
             perror("write error");
+            close(fdes);
             delete[] outputFile;
             exit(6);
         }
 
     }
+    close(fdes);
 
 }
 

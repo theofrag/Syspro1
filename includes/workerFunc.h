@@ -1,1 +1,1 @@
-void workerFunc(char*);
+void workerFunc(char*,char*);

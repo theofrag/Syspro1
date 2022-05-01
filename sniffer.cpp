@@ -15,7 +15,7 @@ using namespace std;
 
 // set queue to global so it can be handled by sa_handler
 static queue <pid_t> workersQueue;
-static vector <char*> pipes;
+static vector <char*> pipes{};
 
 
 void sigchdlHandler(int signo){
@@ -39,6 +39,12 @@ void sigchdlHandler(int signo){
 
 void catchInterrupt(int signo){
     
+    // unlink pipes
+    for(int i = 0; i < pipes.size() ; ++i){
+        unlink(pipes[i]);
+        delete[] pipes[i];
+    }
+
     kill(0,SIGKILL);
 }
 
@@ -118,7 +124,7 @@ int main(int argc, char* argv[]){
             exit(21);
         }
 
-        char inbuf[256];
+        char inbuf[257];
 
         // max file name in unix is 256 chars + 1 for '\0'
         char* filename;
@@ -128,15 +134,16 @@ int main(int argc, char* argv[]){
         bool firstTime = true;
 
         while(true){
-            
+
             sofar = 0;
             int readable;
             // manager communicates with listener
 
             if(  ((readable = read(managerListenerCommunicationPipe[READ],inbuf,256)) == -1 ) && errno != EINTR ){
                 perror("read error");
+                kill(getpid(),SIGINT);
             }
-
+            
             // and errno == EINTR
             // continue: go to the next iteration
             if( readable == -1)
@@ -144,6 +151,7 @@ int main(int argc, char* argv[]){
 
             // because read does not null terminate buffer, i add "\0" with snprintf
             char* test = new char[readable+1];
+            inbuf[readable] = '\0';
             snprintf(test,readable+1,"%s",inbuf);
 
             // in buffer may more than one files appear
@@ -166,6 +174,7 @@ int main(int argc, char* argv[]){
                 while(true){
                     if(((readable = read(managerListenerCommunicationPipe[READ],&byteChar,1)) == -1 ) && errno != EINTR ){
                         perror("read error");
+                        kill(getpid(),SIGINT);
                     }
                     // and errno == EINTR
                     if( readable == -1)
@@ -214,7 +223,17 @@ int main(int argc, char* argv[]){
                     // create a named pipe.
                     if(  (mkfifo(pipe, PERMS) < 0) && errno != EEXIST ){
                             perror("cant create named pipe");
-                            //TODO exit or send signal to stop 
+                            if(workerpid != 0)
+                                kill(getpid(),SIGINT);
+                            else
+                                kill(getppid(),SIGINT);
+                            exit(30);
+                    }else{
+                        // keep pipe names so you can delete them in the end of the execution
+                        if(workerpid != 0)
+                            pipes.push_back(pipe);
+                        else
+                            delete[] pipe;
                     }
                       
                     // manager
@@ -225,20 +244,24 @@ int main(int argc, char* argv[]){
                         //* blocks here till other side  call open
                         if ( (pipeDesc = open(pipe, O_WRONLY)) < 0 ){
                             perror( "cant opeeeen pipe" );
-                            unlink(pipe);
+                            kill(getpid(),SIGINT);
                             exit(10);
                         }
 
                         // write filename in pipe
                         if( write(pipeDesc,filename, strlen(filename)) < 0 ){
                             perror("write to named pipe");
-                            unlink(pipe);
+                            close(pipeDesc);
+                            kill(getpid(),SIGINT);
                             exit(11);
                         } 
 
                         // close pipe
                         //TODO BALE ERROR HANDLING
-                        close(pipeDesc);
+                        if(close(pipeDesc)){
+                            perror("close pipe");
+                            kill(getpid(),SIGINT);
+                        }
                     }
 
                     //  worker
@@ -251,10 +274,10 @@ int main(int argc, char* argv[]){
                             char* pipe = new char[2*sizeof(pid_t)+3];
                             snprintf(pipe,2*sizeof(pid_t)+3,"%d%d",getppid(),getpid());
 
-                            workerFunc(pipe);
+                            workerFunc(pipe,path);
                             
-                            // worker calls stop     
-                            //TODO BALE ERROR HANDLING                   
+                            // worker calls stop      
+                            delete[] pipe;               
                             kill(getpid(),SIGSTOP);
                         }
                     }
@@ -269,23 +292,25 @@ int main(int argc, char* argv[]){
                     snprintf(pipe,2*sizeof(pid_t)+3,"%d%d",getpid(),workersQueue.front());
                     
                     // send signal to worker to continue
-                    //TODO BALE ERROR HANDLING
                     kill(workersQueue.front(),SIGCONT);
 
                     int pipeDesc;
                     if ( (pipeDesc = open(pipe, O_WRONLY)) < 0 ){
-                        perror( "cant opeen pipe from else");
-                        unlink(pipe);
+                        perror( "cant open pipe");
+                        delete pipe;
+                        kill(getpid(),SIGINT);
                         exit(10);
                     }
 
                     if( write(pipeDesc,filename, strlen(filename)) < 0 ){
-                        perror("write to named pipe from else");
-                        unlink(pipe);
+                        perror("write to named pipe");
+                        delete pipe;
+                        close(pipeDesc);
+                        kill(getpid(),SIGINT);
                         exit(11);
                     } 
 
-                    //TODO BALE ERROR HANDLING
+                    delete[] pipe;
                     close(pipeDesc);
                 }
 
@@ -330,9 +355,6 @@ int main(int argc, char* argv[]){
                 }else if(firstTime){
                     firstTime = false;
                 }
-
-                // TODO these to flag tis protis epanalipsis se false
-
             }
         }
     }
