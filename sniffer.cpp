@@ -15,48 +15,72 @@ using namespace std;
 
 // set queue to global so it can be handled by sa_handler
 static queue <pid_t> workersQueue;
+static vector <char*> pipes;
 
-void conHandler(int signo){
-
-    //write in pipe
-
-    // workersQueue.pop();
-}
 
 void sigchdlHandler(int signo){
     int status;
+    
     pid_t p = waitpid(-1,&status,WUNTRACED|WCONTINUED);
+    if(p < 0 ){
+        perror("waitpid error");
+        exit(20);
+    }
     
     // what caused the signal
     if ( WIFCONTINUED(status) ){
         workersQueue.pop();
-    }else{
+    }
+    
+    else{
          workersQueue.push(p);
     }
+}
 
-   
+void catchInterrupt(int signo){
+    
+    kill(0,SIGKILL);
 }
 
 
-int main(void){
+
+int main(int argc, char* argv[]){
+
+    char* path;
+
+    // handle arguments
+    if(argc <= 2){
+        //current path
+        path = new char[3];
+        strcpy(path,"./");
+    }
+    else if(argc == 3 ){
+        //TODO path
+        path = new char[strlen(argv[2])+1];
+        strcpy(path,argv[2]);
+
+    }else{
+        cout<< "Passed too many arguments"<<endl;
+        exit(-1);
+    }
+
     
     // define signals behavior
     sigset_t managerWorksSignalsSet;
     sigemptyset(&managerWorksSignalsSet);
-    static struct sigaction conact,chdlact;
-    sigaddset(&managerWorksSignalsSet,SIGCONT);
+    static struct sigaction intrpt,chdlact;
+    sigaddset(&managerWorksSignalsSet,SIGINT);
     sigaddset(&managerWorksSignalsSet,SIGCHLD);
     sigaddset(&managerWorksSignalsSet,SIGSTOP);
-    conact.sa_handler = conHandler;
-    sigaction(SIGCONT,&conact,NULL);
-
+    sigaddset(&managerWorksSignalsSet,SIGKILL);
+    intrpt.sa_handler = catchInterrupt;
+    sigaction(SIGINT,&intrpt,NULL);
     chdlact.sa_handler = sigchdlHandler;
     sigaction(SIGCHLD,&chdlact,NULL);
-
-
+    
     
 
-    // buffer for pipe read/write
+    // unnamed pipe for manager/listener communication
     int managerListenerCommunicationPipe[2];
 
     if(pipe(managerListenerCommunicationPipe) == -1){
@@ -72,19 +96,27 @@ int main(void){
         perror("pipe call");
         exit(2);
     
-    // child proccess - Listener - writes
+    // child proccess - Listener - writes to pipe
     case 0:
+
         // child writes
-        close(managerListenerCommunicationPipe[READ]);
+        if( close(managerListenerCommunicationPipe[READ]) < 0 ){
+            perror("close unnamed pipe on listener");
+            exit(20);
+        }
         // call listener function
-        listener(managerListenerCommunicationPipe[WRITE]);
+        listener(managerListenerCommunicationPipe[WRITE],path);
         break;
         
-    // parent proccess - Manager -reads 
+    // parent proccess - Manager -reads from pipe
     default:
 
         // parent reads
-        close(managerListenerCommunicationPipe[WRITE]);
+
+        if( close(managerListenerCommunicationPipe[WRITE]) < 0 ){
+            perror("close unnamed pipe on manager");
+            exit(21);
+        }
 
         char inbuf[256];
 
@@ -92,6 +124,8 @@ int main(void){
         char* filename;
 
         int sofar = 0;
+
+        bool firstTime = true;
 
         while(true){
             
@@ -104,20 +138,27 @@ int main(void){
             }
 
             // and errno == EINTR
+            // continue: go to the next iteration
             if( readable == -1)
                 continue;
 
-            // because read does not null terminate buffer
+            // because read does not null terminate buffer, i add "\0" with snprintf
             char* test = new char[readable+1];
             snprintf(test,readable+1,"%s",inbuf);
+
+            // in buffer may more than one files appear
+            // each file is seperated with the other by '\n'
+            // use strtok to retrieve each file name
             filename = strtok(test,"\n");
             
+            // sofar: length of first file name
             sofar += strlen(filename);
             
-            // if not even the first file name is in buffer
+            // if not even the first file name is in buffer, then inbuf[sofar] != '\n'
             if( inbuf[sofar] != '\n' ){
-                // take the rest
 
+                // take the rest bytes of the filename
+                // read byte by byte until you read the filename
                 char byteChar;
                 char* previousStr = new char[sofar];
                 strcpy( previousStr , filename );
@@ -127,8 +168,8 @@ int main(void){
                         perror("read error");
                     }
                     // and errno == EINTR
-                    if( readable == -1){
-                        continue;}
+                    if( readable == -1)
+                        continue;
                     
                     if(byteChar != '\n'){
                         filename = new char[sofar+1];
@@ -156,96 +197,102 @@ int main(void){
             while ( filename != NULL ){
                 
                 // if no available worker in queue
-                if(workersQueue.empty()){
+                if(workersQueue.empty() || (firstTime == true)  ){
                     
+                    // fork to create a worker
                     pid_t workerpid = fork(); 
-                
+
+                    // pipe name consist of manager pid and worker pid
+                    // for example if manager pid is 1234 and worker pid is 5678 then
+                    //  pipe name will by 12345678
                     char* pipe = new char[2*sizeof(pid_t)+3];
                     if(workerpid == 0)
                         snprintf(pipe, 2*sizeof(pid_t)+3 ,"%d%d",getppid(),getpid());
                     else
                         snprintf(pipe, 2*sizeof(pid_t)+3,"%d%d",getpid(),workerpid);
-                    // create a named pipe. Pipe name is concat of parendpid and workerpid
+
+                    // create a named pipe.
                     if(  (mkfifo(pipe, PERMS) < 0) && errno != EEXIST ){
                             perror("cant create named pipe");
+                            //TODO exit or send signal to stop 
                     }
                       
-                    // parent
+                    // manager
                     if(workerpid != 0 ){
-                        
-                        
-                        
+
                         int pipeDesc;
 
-
-                        // blocks till other side to call open
+                        //* blocks here till other side  call open
                         if ( (pipeDesc = open(pipe, O_WRONLY)) < 0 ){
                             perror( "cant opeeeen pipe" );
                             unlink(pipe);
                             exit(10);
                         }
 
-
+                        // write filename in pipe
                         if( write(pipeDesc,filename, strlen(filename)) < 0 ){
                             perror("write to named pipe");
                             unlink(pipe);
                             exit(11);
                         } 
 
+                        // close pipe
+                        //TODO BALE ERROR HANDLING
                         close(pipeDesc);
-                        // unlink(pipe);
-
-
                     }
+
                     //  worker
                     if( workerpid == 0){
+                        
+                        // no busy waiting here, because it blocks with SIGSTOP
                         while(true){
                             
-                            // pipe name
+                            // retrieve pipe name using parent pid and your pid
                             char* pipe = new char[2*sizeof(pid_t)+3];
                             snprintf(pipe,2*sizeof(pid_t)+3,"%d%d",getppid(),getpid());
 
                             workerFunc(pipe);
                             
-                            // call stop for yourself                            
+                            // worker calls stop     
+                            //TODO BALE ERROR HANDLING                   
                             kill(getpid(),SIGSTOP);
                         }
                     }
                                         
                 }
                 
+                // if there is available worker
                 else{
                     
-                    //write in pipe
+                    // retrieve pipe name 
                     char* pipe = new char[2*sizeof(pid_t)+3];
                     snprintf(pipe,2*sizeof(pid_t)+3,"%d%d",getpid(),workersQueue.front());
-
+                    
+                    // send signal to worker to continue
+                    //TODO BALE ERROR HANDLING
                     kill(workersQueue.front(),SIGCONT);
-                    int pipeDesc;
 
+                    int pipeDesc;
                     if ( (pipeDesc = open(pipe, O_WRONLY)) < 0 ){
                         perror( "cant opeen pipe from else");
                         unlink(pipe);
                         exit(10);
                     }
 
-                    ofstream f;
-                    f.open("t",ios::app);
-                    f << "lalalala"<<endl;
-                    f.close();
                     if( write(pipeDesc,filename, strlen(filename)) < 0 ){
                         perror("write to named pipe from else");
                         unlink(pipe);
                         exit(11);
                     } 
 
+                    //TODO BALE ERROR HANDLING
                     close(pipeDesc);
-                    
                 }
 
-
+                // take next file name, if there exist one
                 filename = strtok(NULL,"\n");
-             
+
+                // this if the filename is not completely retrieved from pipe of listener-manager
                 if(filename != NULL){
                     sofar += strlen(filename);
 
@@ -261,8 +308,8 @@ int main(void){
                                 perror("read error");
                             }
                             // and errno == EINTR
-                            if( readable == -1){
-                                continue;}
+                            if( readable == -1)
+                                continue;
                             
                             if(byteChar != '\n'){
                                 filename = new char[sofar+1];
@@ -278,19 +325,16 @@ int main(void){
                                 filename = strtok(filename,"\n");
                                 break;
                             }
-
-
                         }
-
                     }
-                
+                }else if(firstTime){
+                    firstTime = false;
                 }
-                
+
+                // TODO these to flag tis protis epanalipsis se false
 
             }
         }
-        
-
     }
 
     return 0;

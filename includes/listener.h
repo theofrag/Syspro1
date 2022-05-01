@@ -1,1 +1,1 @@
-void listener(int);
+void listener(int,char*);

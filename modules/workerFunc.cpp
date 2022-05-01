@@ -25,10 +25,6 @@ void workerFunc(char* pipeName){
     // read doenst terminate with null
     fileName[t] = '\0';
 
-    // ofstream f;
-    // f.open("t2");
-    // f<<fileName;
-    // f.close();
     
     
 

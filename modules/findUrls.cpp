@@ -170,7 +170,9 @@ int findUrls(char* filename, char* listenerPath ,char* outputPath){
         }
 
         // prints in binary form so ints dont display with cat
-        if(write(fdes,&(itr->second),sizeof(itr->second))<0){
+        char* number = new char[sizeof(number)+2];
+        snprintf(number,sizeof(number)+2,"%d",itr->second);
+        if(write(fdes,number,sizeof(itr->second))<0){
             perror("write error");
             delete[] outputFile;
             exit(6);
