@@ -120,7 +120,10 @@ int findUrls(char* filename, char* listenerPath ,char* outputPath){
                                                     exit(4);
                                                 }
                                                 if(ch == '.'){
-                                                    http = "";
+                                                    http.erase();
+                                                }
+                                                else{
+                                                    http += ch;
                                                 }
                                             }
                                         }
