@@ -27,4 +27,4 @@ clean:
 	rm -f $(OBJS) $(EXEC)
 
 valgrind:
-	valgrind ./$(EXEC) $(ARGS)
+	valgrind --leak-check=full --show-leak-kinds=all -s ./$(EXEC) $(ARGS)
