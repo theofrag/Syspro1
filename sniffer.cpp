@@ -94,6 +94,9 @@ int main(int argc, char* argv[]){
     sigaction(SIGINT,&intrpt,NULL);
     chdlact.sa_handler = sigchdlHandler;
     sigaction(SIGCHLD,&chdlact,NULL);
+
+    mkdir("outs/",0766);
+    mkdir("pipes/",0766);
     
     
 
