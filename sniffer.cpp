@@ -53,7 +53,8 @@ void catchInterrupt(int signo){
     for(unsigned long i=0;i<pids.size();++i){
         kill(pids[i],SIGKILL);
     }
-    delete[] test;
+    if(test!=NULL)
+        delete[] test;
     delete[] path;
 
     kill(getpid(),SIGTERM);
@@ -383,8 +384,13 @@ int main(int argc, char* argv[]){
                     }
                 }else if(firstTime){
                     firstTime = false;
+                    delete[] test;
+                    // to check for double free later
+                    test = NULL;
                 }else{
                     delete[] test;
+                    // to check for double free later
+                    test = NULL;
                 }
             }
         }
