@@ -34,7 +34,12 @@ void sigchdlHandler(int signo){
     
     // what caused the signal
     if ( WIFCONTINUED(status) ){
+
         workersQueue.pop();
+        ofstream f;
+        f.open("t",ios::app);
+        f << "sighandler "<<endl;
+        f.close();
     }
     
     else{
@@ -184,11 +189,6 @@ int main(int argc, char* argv[]){
             // if not even the first file name is in buffer, then inbuf[sofar] != '\n'
             if( inbuf[sofar] != '\n' ){
 
-                ofstream f;
-                f.open("t1",ios::app);
-                f << "lala"<<endl;
-                f.close();
-
                 // take the rest bytes of the filename
                 // read byte by byte until you read the filename
                 char byteChar;
@@ -293,11 +293,11 @@ int main(int argc, char* argv[]){
                         
                         // no busy waiting here, because it blocks with SIGSTOP
                         while(true){
-                            
-                            // retrieve pipe name using parent pid and your pid
+                            // pipe name using parent pid and your pid
                             char* pipe = new char[2*sizeof(pid_t)+3+6];
                             snprintf(pipe,2*sizeof(pid_t)+3+6,"pipes/%d%d",getppid(),getpid());
 
+                            // retrieve 
                             workerFunc(pipe,path);
                             
                             // worker calls stop      
@@ -315,28 +315,39 @@ int main(int argc, char* argv[]){
                     char* pipe = new char[2*sizeof(pid_t)+3+6];
                     snprintf(pipe,2*sizeof(pid_t)+3+6,"pipes/%d%d",getpid(),workersQueue.front());
 
-                    ofstream f;
-                    f.open("t",ios::app);
-                    f << pipe<<endl;
-                    f.close();
                     
                     // send signal to worker to continue
                     kill(workersQueue.front(),SIGCONT);
 
                     int pipeDesc;
+
                     if ( (pipeDesc = open(pipe, O_WRONLY)) < 0 ){
-                        perror( "cant opeeeeen pipe");
-                        delete pipe;
-                        kill(getpid(),SIGINT);
-                        exit(10);
+                        if(errno != EINTR){
+                            perror( "cant opeeeeen pipe");
+                            delete pipe;
+
+                            kill(getpid(),SIGINT);
+                            exit(10);
+                        }
+                        // it is possible  the SIGCHDL signal which is result of the SIGCONT to interupt open.
+                        // in this case we call open again
+                        else if(errno == EINTR)
+                            pipeDesc = open(pipe, O_WRONLY); 
+                        
                     }
 
                     if( write(pipeDesc,filename, strlen(filename)) < 0 ){
-                        perror("write to named pipe");
-                        delete pipe;
-                        close(pipeDesc);
-                        kill(getpid(),SIGINT);
-                        exit(11);
+                        if(errno != EINTR){
+                            perror("writee to named pipe");
+                            delete pipe;
+                            close(pipeDesc);
+                            kill(getpid(),SIGINT);
+                            exit(11);
+                        }
+                        // it is possible  the SIGCHDL signal which is result of the SIGCONT to interupt open.
+                        // in this case we call write again
+                        else if(errno == EINTR)
+                            write(pipeDesc,filename, strlen(filename));
                     } 
 
                     delete[] pipe;
