@@ -18,14 +18,13 @@ using namespace std;
 
 
 // it takes a file name and writes to the file filename.out urls from filename and the number of their occurances
-//TODO an den yparxei to www. pali to dexomai, afoy yparxei to http://
-int findUrls(char* filename, char* listenerPath ,char* outputPath){
+void findUrls(char* filename, char* listenerPath ,char* outputPath){
 
     map <string,int> urlMap;
     string http;
-    // 
+    
     int fdes; 
-
+    // listener file is listener path + filename
     char* listenerFile = new char[strlen(filename) + strlen(listenerPath)+5];
     strcpy(listenerFile,listenerPath);
     strcat(listenerFile,filename);
@@ -49,6 +48,7 @@ int findUrls(char* filename, char* listenerPath ,char* outputPath){
             exit(4);
         }
 
+        // if read http:// or http://www. ignore it and keep the usefull information
         if(ch == 'h'){
             if(read(fdes,&ch,1)<0){
                 perror("read from file");

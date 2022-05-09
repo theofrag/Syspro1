@@ -34,12 +34,7 @@ void sigchdlHandler(int signo){
     
     // what caused the signal
     if ( WIFCONTINUED(status) ){
-
         workersQueue.pop();
-        ofstream f;
-        f.open("t",ios::app);
-        f << "sighandler "<<endl;
-        f.close();
     }
     
     else{
@@ -100,8 +95,17 @@ int main(int argc, char* argv[]){
     chdlact.sa_handler = sigchdlHandler;
     sigaction(SIGCHLD,&chdlact,NULL);
 
-    mkdir("outs/",0766);
-    mkdir("pipes/",0766);
+
+    if ((mkdir("outs/",0766)) < 0 && (errno != EEXIST)  ){
+        perror("create dir");
+        exit(21);
+    }
+    if ((mkdir("pipes/",0766)) < 0 && (errno != EEXIST)  ){
+        perror("create dir");
+        exit(21);
+    }
+    // mkdir("outs/",0766);
+    // mkdir("pipes/",0766);
     
     
 
@@ -388,10 +392,7 @@ int main(int argc, char* argv[]){
                                 // to keep with the below while
                                 filename = strtok(filename,"\n");
                                 sofar += strlen(filename);
-                                ofstream f;
-                                f.open("t2",ios::app);
-                                f << filename<<endl;
-                                f.close();
+
                                 break;
                             }
                         }
