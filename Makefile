@@ -13,7 +13,7 @@ OBJS =   sniffer.o $(MODULES)/findUrls.o  $(MODULES)/workerFunc.o $(MODULES)/lis
 
 EXEC = sniffer
 
-ARGS = -p ./listenerFile/
+ARGS = -p ./
 
 $(EXEC): $(OBJS)
 	$(CC) $(OBJS) -o $(EXEC) $(LDFLAGS) 
@@ -25,6 +25,7 @@ run: $(EXEC)
 
 clean:
 	rm -f $(OBJS) $(EXEC)
+	rm -f ./outs/*.out
 
 valgrind:
 	valgrind --leak-check=full --show-leak-kinds=all -s ./$(EXEC) $(ARGS)
