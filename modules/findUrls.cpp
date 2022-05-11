@@ -32,7 +32,7 @@ void findUrls(char* filename, char* listenerPath ,char* outputPath){
     
 
     if( (fdes = open(listenerFile, O_RDWR)) == -1){
-        perror("opeen error ");
+        perror("open error ");
         exit(3);
     }
 

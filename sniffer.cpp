@@ -73,12 +73,15 @@ int main(int argc, char* argv[]){
         strcpy(path,"./");
     }
     else if(argc == 3 ){
-        path = new char[strlen(argv[2])+1];
+        // +1 for '/' and +1 for '0'
+        path = new char[strlen(argv[2])+2];
         strcpy(path,argv[2]);
+        strcat(path,"/");
+
 
     }else{
         cout<< "Passed too many arguments"<<endl;
-        exit(-1);
+        exit(1);
     }
 
     
@@ -104,9 +107,7 @@ int main(int argc, char* argv[]){
         perror("create dir");
         exit(21);
     }
-    // mkdir("outs/",0766);
-    // mkdir("pipes/",0766);
-    
+  
     
 
     // unnamed pipe for manager/listener communication
@@ -272,7 +273,7 @@ int main(int argc, char* argv[]){
 
                         //* blocks here till other side  call open
                         if ( (pipeDesc = open(pipe, O_WRONLY)) < 0 ){
-                            perror( "cant opeeeen pipe" );
+                            perror( "cant open pipe" );
                             kill(getpid(),SIGINT);
                             exit(10);
                         }
@@ -327,7 +328,7 @@ int main(int argc, char* argv[]){
 
                     if ( (pipeDesc = open(pipe, O_WRONLY)) < 0 ){
                         if(errno != EINTR){
-                            perror( "cant opeeeeen pipe");
+                            perror( "cant open pipe");
                             delete pipe;
 
                             kill(getpid(),SIGINT);
@@ -342,7 +343,7 @@ int main(int argc, char* argv[]){
 
                     if( write(pipeDesc,filename, strlen(filename)) < 0 ){
                         if(errno != EINTR){
-                            perror("writee to named pipe");
+                            perror("write to named pipe");
                             delete pipe;
                             close(pipeDesc);
                             kill(getpid(),SIGINT);
