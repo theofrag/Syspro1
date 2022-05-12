@@ -96,9 +96,9 @@ void findUrls(char* filename, char* listenerPath ,char* outputPath){
                                         perror("read from file");
                                         exit(4);
                                     }
+                                    http += ch;
                                     // ignore www. if exist
                                     if(ch == 'w'){
-                                        http += "w";
 
                                         if(read(fdes,&ch,1)<0){
                                             perror("read from file");

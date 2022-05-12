@@ -13,7 +13,7 @@ OBJS =   sniffer.o $(MODULES)/findUrls.o  $(MODULES)/workerFunc.o $(MODULES)/lis
 
 EXEC = sniffer
 
-ARGS = -p ./listenerFile/
+ARGS = 
 
 $(EXEC): $(OBJS)
 	$(CC) $(OBJS) -o $(EXEC) $(LDFLAGS) 
